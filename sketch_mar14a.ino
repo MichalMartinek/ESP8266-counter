@@ -1,10 +1,10 @@
 #include <TM1637Display.h>
 #include <EEPROM.h>
 
-const int CLK = D6; //Set the CLK pin connection to the display
-const int DIO = D5; //Set the DIO pin connection to the display
+const int CLK = D6; // Set the CLK pin connection to the display
+const int DIO = D5; // Set the DIO pin connection to the display
 const int SWITCH = D1;
-const int USER_BUTTON = 16;
+const int RESET_BUTTON = D3;
 
 #define COLON_OFF 0b00000000
 #define COLON_ON  0b01000000
@@ -21,7 +21,7 @@ unsigned long nextSecondChange = 0; // Time of next second change
 unsigned long nextDotChange = 0; // Time of next displaying colon
 
 int switchValue = 2;
-int userButtonValue = 2;
+int resetButtonValue = 2;
 
 void displayTime(int colon) {
   int displayValue = elapsedMinutes * 100 + elapsedSeconds;
@@ -33,13 +33,13 @@ void saveToMemory(byte minutes, byte seconds) {
   EEPROM.write(SECONDS_ADDRESS, seconds);
   EEPROM.write(MINUTES_ADDRESS, minutes);
   // Store data to EEPROM
-  EEPROM.commit();    
+  EEPROM.commit();
 }
 
 void setup() {
   Serial.begin(115200);
   EEPROM.begin(512);
-  pinMode(USER_BUTTON, INPUT);
+  pinMode(RESET_BUTTON, INPUT);
   pinMode(SWITCH, INPUT);
   display.setBrightness(4);  //  0 (min) - 7 (max)
 
@@ -59,39 +59,54 @@ void resetTime() {
   saveToMemory(elapsedMinutes, elapsedSeconds);
 }
 
-void loop() {
-  userButtonValue = digitalRead(USER_BUTTON);
-  bool isUserButtonPresssed = userButtonValue == 0;
+void addSecond(bool isSwitchOn) {
+  nextSecondChange += 1000;
+  bool hasMinutesChanged = false;
 
-  if (isUserButtonPresssed && (elapsedSeconds != 0 || elapsedMinutes != 0)) {
+  if (isSwitchOn) {
+    elapsedSeconds++;
+    if (elapsedSeconds >= 60) {
+      elapsedSeconds = 0;
+      elapsedMinutes++;
+      hasMinutesChanged = true;
+    }
+    if (elapsedMinutes >= 100) {
+      elapsedMinutes = 0;
+    }
+  }
+
+  displayTime(COLON_OFF);
+
+  if (hasMinutesChanged) {
+    saveToMemory(elapsedMinutes, elapsedSeconds);
+  }
+}
+
+void turnColonOn(bool isSwitchOn) {
+  nextDotChange += 1000;
+  if (isSwitchOn) {
+    displayTime(COLON_ON);
+  }
+}
+
+void loop() {
+  resetButtonValue = digitalRead(RESET_BUTTON);
+  bool isResetButtonPresssed = resetButtonValue == 0;
+
+  if (isResetButtonPresssed && (elapsedSeconds != 0 || elapsedMinutes != 0)) {
     resetTime();
   }
-  
+
   switchValue = digitalRead(SWITCH);
   bool isSwitchOn = switchValue == 0;
 
   // If one second passed
   if (millis() > nextSecondChange) {
-    nextSecondChange += 1000;
-
-    if (isSwitchOn) {
-      // Inkrementuj cas
-      elapsedSeconds++;
-      if (elapsedSeconds >= 60) {
-        elapsedSeconds = 0;
-        elapsedMinutes++;
-      }
-      if (elapsedMinutes >= 100) elapsedMinutes = 0;
-    }
-    displayTime(COLON_OFF);
-    if (isSwitchOn) {
-      saveToMemory(elapsedMinutes, elapsedSeconds);
-    }
+    addSecond(isSwitchOn);
   }
 
-  // Zapni dvojtecku v pulce sekundy (zmena sekundy ji vypne)
+  // Turn the colon on in half of second
   if (millis() > nextDotChange) {
-    nextDotChange += 1000;
-    displayTime(COLON_ON);
+    turnColonOn(isSwitchOn);
   }
 }
