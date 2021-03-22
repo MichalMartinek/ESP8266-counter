@@ -6,36 +6,34 @@ const int DIO = D5; //Set the DIO pin connection to the display
 const int SWITCH = D1;
 const int USER_BUTTON = 16;
 
-// Zapni nbebo vypni tecku
-#define DOT_OFF 0b00000000
-#define DOT_ON  0b01000000
+#define COLON_OFF 0b00000000
+#define COLON_ON  0b01000000
 
 #define SECONDS_ADDRESS  0
 #define MINUTES_ADDRESS  1
 
 TM1637Display display(CLK, DIO);
 
-// Aktualni mninuty a sekundy
-byte mm = 0;
-byte ss = 0;
+byte elapsedMinutes = 0;
+byte elapsedSeconds = 0;
 
-unsigned long nextSecondChange = 0; // Cas pristi zmeny sekundy
-unsigned long nextDotChange = 0; // Cas pristiho zapnutí dvojtecky
+unsigned long nextSecondChange = 0; // Time of next second change
+unsigned long nextDotChange = 0; // Time of next displaying colon
 
 int switchValue = 2;
 int userButtonValue = 2;
 
-void displayTime(int dot) {
-  int displayValue = mm * 100 + ss;
-  display.showNumberDecEx(displayValue, dot, true);
+void displayTime(int colon) {
+  int displayValue = elapsedMinutes * 100 + elapsedSeconds;
+  display.showNumberDecEx(displayValue, colon, true);
 }
 
 void saveToMemory(byte minutes, byte seconds) {
   // write to EEPROM.
   EEPROM.write(SECONDS_ADDRESS, seconds);
   EEPROM.write(MINUTES_ADDRESS, minutes);
-
-  EEPROM.commit();    //Store data to EEPROM
+  // Store data to EEPROM
+  EEPROM.commit();    
 }
 
 void setup() {
@@ -43,49 +41,57 @@ void setup() {
   EEPROM.begin(512);
   pinMode(USER_BUTTON, INPUT);
   pinMode(SWITCH, INPUT);
-  // Nastaveni jasu: 0 (min) - 7 (max)
-  display.setBrightness(4);
+  display.setBrightness(4);  //  0 (min) - 7 (max)
 
-  mm = EEPROM.read(MINUTES_ADDRESS);
-  ss = EEPROM.read(SECONDS_ADDRESS);
+  elapsedMinutes = EEPROM.read(MINUTES_ADDRESS);
+  elapsedSeconds = EEPROM.read(SECONDS_ADDRESS);
 
-  displayTime(DOT_ON);
+  displayTime(COLON_ON);
   nextDotChange = millis() + 500;
   nextSecondChange = nextDotChange + 500;
 
   delay(1000);
 }
 
+void resetTime() {
+  elapsedMinutes = 0;
+  elapsedSeconds = 0;
+  saveToMemory(elapsedMinutes, elapsedSeconds);
+}
+
 void loop() {
   userButtonValue = digitalRead(USER_BUTTON);
-  if (userButtonValue == 0 && (ss != 0 || mm != 0)) {
-      mm = 0;
-      ss = 0;
-      saveToMemory(mm, ss);
+  bool isUserButtonPresssed = userButtonValue == 0;
+
+  if (isUserButtonPresssed && (elapsedSeconds != 0 || elapsedMinutes != 0)) {
+    resetTime();
   }
-  // Zobraz cas, pokud uplynula sekunda
+  
+  switchValue = digitalRead(SWITCH);
+  bool isSwitchOn = switchValue == 0;
+
+  // If one second passed
   if (millis() > nextSecondChange) {
     nextSecondChange += 1000;
 
-    switchValue = digitalRead(SWITCH);
-    if (switchValue == 0) {
+    if (isSwitchOn) {
       // Inkrementuj cas
-      ss++;
-      if (ss >= 60) {
-        ss = 0;
-        mm++;
+      elapsedSeconds++;
+      if (elapsedSeconds >= 60) {
+        elapsedSeconds = 0;
+        elapsedMinutes++;
       }
-      if (mm >= 100) mm = 0;
+      if (elapsedMinutes >= 100) elapsedMinutes = 0;
     }
-    displayTime(DOT_OFF);
-    if (switchValue == 0) {
-      saveToMemory(mm, ss);
+    displayTime(COLON_OFF);
+    if (isSwitchOn) {
+      saveToMemory(elapsedMinutes, elapsedSeconds);
     }
   }
 
   // Zapni dvojtecku v pulce sekundy (zmena sekundy ji vypne)
   if (millis() > nextDotChange) {
     nextDotChange += 1000;
-    displayTime(DOT_ON);
+    displayTime(COLON_ON);
   }
 }
