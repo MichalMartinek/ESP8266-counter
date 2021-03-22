@@ -9,11 +9,12 @@ const int RESET_BUTTON = D3;
 #define COLON_OFF 0b00000000
 #define COLON_ON  0b01000000
 
-#define SECONDS_ADDRESS  0
 #define MINUTES_ADDRESS  1
+#define HOURS_ADDRESS  2
 
 TM1637Display display(CLK, DIO);
 
+byte elapsedHours = 0;
 byte elapsedMinutes = 0;
 byte elapsedSeconds = 0;
 
@@ -24,15 +25,13 @@ int switchValue = 2;
 int resetButtonValue = 2;
 
 void displayTime(int colon) {
-  int displayValue = elapsedMinutes * 100 + elapsedSeconds;
+  int displayValue = elapsedHours * 100 + elapsedMinutes;
   display.showNumberDecEx(displayValue, colon, true);
 }
 
-void saveToMemory(byte minutes, byte seconds) {
-  // write to EEPROM.
-  EEPROM.write(SECONDS_ADDRESS, seconds);
+void saveToMemory(byte minutes, byte hours) {
   EEPROM.write(MINUTES_ADDRESS, minutes);
-  // Store data to EEPROM
+  EEPROM.write(HOURS_ADDRESS, hours);
   EEPROM.commit();
 }
 
@@ -44,7 +43,7 @@ void setup() {
   display.setBrightness(4);  //  0 (min) - 7 (max)
 
   elapsedMinutes = EEPROM.read(MINUTES_ADDRESS);
-  elapsedSeconds = EEPROM.read(SECONDS_ADDRESS);
+  elapsedHours = EEPROM.read(HOURS_ADDRESS);
 
   displayTime(COLON_ON);
   nextDotChange = millis() + 500;
@@ -56,7 +55,8 @@ void setup() {
 void resetTime() {
   elapsedMinutes = 0;
   elapsedSeconds = 0;
-  saveToMemory(elapsedMinutes, elapsedSeconds);
+  elapsedHours = 0;
+  saveToMemory(elapsedMinutes, elapsedHours);
 }
 
 void addSecond(bool isSwitchOn) {
@@ -70,15 +70,16 @@ void addSecond(bool isSwitchOn) {
       elapsedMinutes++;
       hasMinutesChanged = true;
     }
-    if (elapsedMinutes >= 100) {
+    if (elapsedMinutes >= 60) {
       elapsedMinutes = 0;
+      elapsedHours++;
     }
   }
 
   displayTime(COLON_OFF);
 
   if (hasMinutesChanged) {
-    saveToMemory(elapsedMinutes, elapsedSeconds);
+    saveToMemory(elapsedMinutes, elapsedHours);
   }
 }
 
