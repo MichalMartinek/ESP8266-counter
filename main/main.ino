@@ -18,6 +18,7 @@ byte elapsedHours = 0;
 byte elapsedMinutes = 0;
 byte elapsedSeconds = 0;
 
+// This number will overflow (go back to zero), after approximately 50 days, but also the returned value from millis() function
 unsigned long nextSecondChange = 0; // Time of next second change
 unsigned long nextDotChange = 0; // Time of next displaying colon
 
